@@ -4,11 +4,11 @@ import pandas as pd
 # ==========================================
 # CONFIGURACIÓN DE PÁGINA
 # ==========================================
-st.set_page_config(page_title="Diagnóstico SQL - Fumiscor", layout="wide", page_icon="🔍")
+st.set_page_config(page_title="Diagnóstico SQL - FAMMA", layout="wide", page_icon="🔍")
 
-st.title("🔍 Explorador de Datos Crudos (SQL)")
+st.title("🔍 Explorador de Datos Crudos FAMMA (SQL)")
 st.write("""
-Esta herramienta consulta directamente las tablas de la base de datos `wii_bi`. 
+Esta herramienta consulta directamente las tablas de la base de datos `wii_bi` de FAMMA. 
 No aplica filtros de diccionario ni JOINs para que puedas ver exactamente qué está guardado.
 """)
 
@@ -19,9 +19,9 @@ col1, col2 = st.columns([1, 3])
 
 with col1:
     # Por defecto, ponemos la fecha que queremos investigar
-    fecha_consulta = st.date_input("Selecciona la fecha:", value=pd.to_datetime("2026-04-01"))
+    fecha_consulta = st.date_input("Selecciona la fecha:", value=pd.to_datetime("today"))
     
-    # Preparamos las variables de fecha para esquivar el problema del DATETIME
+    # Preparamos las variables de fecha para esquivar el problema del DATETIME en SQL Server
     fecha_str = fecha_consulta.strftime('%Y-%m-%d')
     fecha_fin = (fecha_consulta + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 
@@ -29,7 +29,7 @@ with col2:
     st.info(f"""
     **Consulta que se enviará:**
     `WHERE Date >= '{fecha_str}' AND Date < '{fecha_fin}'`
-    (Esto asegura que traiga cualquier registro que haya ocurrido a cualquier hora dentro de ese día).
+    (Esto asegura que traiga cualquier registro que haya ocurrido a cualquier hora dentro de ese día en FAMMA).
     """)
 
 st.divider()
@@ -37,9 +37,10 @@ st.divider()
 # ==========================================
 # MOTOR DE CONSULTA
 # ==========================================
-if st.button("Consultar Base de Datos", type="primary"):
-    with st.spinner("Conectando a SQL Server..."):
+if st.button("Consultar Base de Datos FAMMA", type="primary"):
+    with st.spinner("Conectando a SQL Server de FAMMA..."):
         try:
+            # Aquí llama a las credenciales [connections.wii_bi] de tus secrets
             conn = st.connection("wii_bi", type="sql")
             
             # --- 1. Tabla de Producción ---
