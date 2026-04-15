@@ -1,91 +1,54 @@
 import streamlit as st
 import pandas as pd
 
-# ==========================================
-# CONFIGURACIÓN DE PÁGINA
-# ==========================================
-st.set_page_config(page_title="Diagnóstico SQL - Fumiscor", layout="wide", page_icon="🔍")
+st.set_page_config(page_title="Inspector SQL - FAMMA", layout="wide", page_icon="🕵️‍♂️")
 
-st.title("🔍 Explorador de Datos Crudos (SQL)")
-st.write("""
-Esta herramienta consulta directamente las tablas de la base de datos `wii_bi`. 
-No aplica filtros de diccionario ni JOINs para que puedas ver exactamente qué está guardado.
-""")
+st.title("🕵️‍♂️ Inspector de Tablas - Base de Datos FAMMA")
+st.write("Usa esta herramienta para comprobar si las tablas realmente tienen datos en el mes seleccionado y si los nombres de las máquinas coinciden.")
 
-# ==========================================
-# INTERFAZ DE SELECCIÓN
-# ==========================================
-col1, col2 = st.columns([1, 3])
-
+col1, col2 = st.columns(2)
 with col1:
-    # Por defecto, ponemos la fecha que queremos investigar
-    fecha_consulta = st.date_input("Selecciona la fecha:", value=pd.to_datetime("2026-04-01"))
-    
-    # Preparamos las variables de fecha para esquivar el problema del DATETIME
-    fecha_str = fecha_consulta.strftime('%Y-%m-%d')
-    fecha_fin = (fecha_consulta + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
-
+    mes = st.number_input("Mes a consultar:", min_value=1, max_value=12, value=3)
 with col2:
-    st.info(f"""
-    **Consulta que se enviará:**
-    `WHERE Date >= '{fecha_str}' AND Date < '{fecha_fin}'`
-    (Esto asegura que traiga cualquier registro que haya ocurrido a cualquier hora dentro de ese día).
-    """)
+    anio = st.number_input("Año a consultar:", min_value=2023, max_value=2030, value=2026)
 
-st.divider()
-
-# ==========================================
-# MOTOR DE CONSULTA
-# ==========================================
-if st.button("Consultar Base de Datos", type="primary"):
-    with st.spinner("Conectando a SQL Server..."):
+if st.button("🔍 Ejecutar Rayos X en la Base de Datos", type="primary"):
+    with st.spinner("Conectando con FAMMA y escaneando tablas..."):
         try:
             conn = st.connection("wii_bi", type="sql")
-            
-            # --- 1. Tabla de Producción ---
-            st.subheader(f"1. Producción Diaria (Tabla: PROD_D_01)")
-            q_prod = f"""
-                SELECT TOP 100 *
-                FROM PROD_D_01
-                WHERE Date >= '{fecha_str}' AND Date < '{fecha_fin}'
-            """
-            df_prod = conn.query(q_prod)
-            
-            if df_prod.empty:
-                st.warning(f"⚠️ La consulta devolvió 0 filas. Físicamente no hay producción registrada para el {fecha_str}.")
-            else:
-                st.success(f"✅ Se encontraron registros. Mostrando los primeros {len(df_prod)}.")
-                st.dataframe(df_prod, use_container_width=True)
 
-            # --- 2. Tabla de OEE / Métricas ---
-            st.subheader(f"2. Métricas OEE (Tabla: PROD_D_03)")
-            q_metrics = f"""
-                SELECT TOP 100 *
-                FROM PROD_D_03
-                WHERE Date >= '{fecha_str}' AND Date < '{fecha_fin}'
-            """
-            df_metrics = conn.query(q_metrics)
-            
-            if df_metrics.empty:
-                st.warning(f"⚠️ No hay métricas OEE calculadas para el {fecha_str}.")
-            else:
-                st.success(f"✅ Se encontraron registros. Mostrando los primeros {len(df_metrics)}.")
-                st.dataframe(df_metrics, use_container_width=True)
+            # 1. REVISAR NOMBRES EXACTOS DE LAS MÁQUINAS
+            st.markdown("### 1. Catálogo de Máquinas (Tabla `CELL`)")
+            st.info("💡 Fíjate en la columna 'Name'. Así es EXACTAMENTE como deben escribirse en nuestro diccionario de Python. ¡Cuidado con espacios al final o al principio!")
+            df_cell = conn.query("SELECT CellId, Name FROM CELL ORDER BY Name")
+            st.dataframe(df_cell, use_container_width=True)
 
-            # --- 3. Tabla de Eventos ---
-            st.subheader(f"3. Eventos y Paradas (Tabla: EVENT_01)")
-            q_events = f"""
-                SELECT TOP 100 *
-                FROM EVENT_01
-                WHERE Date >= '{fecha_str}' AND Date < '{fecha_fin}'
-            """
-            df_events = conn.query(q_events)
-            
-            if df_events.empty:
-                st.warning(f"⚠️ No hay eventos ni paradas registradas para el {fecha_str}.")
+            # 2. REVISAR TABLAS MENSUALES (KPIs)
+            st.markdown("### 2. Tabla Mensual de OEE (Tabla `PROD_M_03`)")
+            df_m03 = conn.query(f"SELECT TOP 100 * FROM PROD_M_03 WHERE Year = {anio} AND Month = {mes}")
+            if df_m03.empty:
+                st.error(f"❌ VACÍA. No hay datos consolidados mensuales para {mes}/{anio}.")
             else:
-                st.success(f"✅ Se encontraron registros. Mostrando los primeros {len(df_events)}.")
-                st.dataframe(df_events, use_container_width=True)
+                st.success(f"✅ CON DATOS. Mostrando registros de {mes}/{anio}:")
+                st.dataframe(df_m03, use_container_width=True)
+
+            # 3. REVISAR TABLAS MENSUALES (PIEZAS)
+            st.markdown("### 3. Tabla Mensual de Piezas (Tabla `PROD_M_01`)")
+            df_m01 = conn.query(f"SELECT TOP 100 * FROM PROD_M_01 WHERE Year = {anio} AND Month = {mes}")
+            if df_m01.empty:
+                st.error(f"❌ VACÍA. No hay conteo de piezas mensuales para {mes}/{anio}.")
+            else:
+                st.success(f"✅ CON DATOS. Mostrando registros de {mes}/{anio}:")
+                st.dataframe(df_m01, use_container_width=True)
+
+            # 4. REVISAR TABLAS DIARIAS (KPIs)
+            st.markdown("### 4. Tabla Diaria de OEE (Tabla `PROD_D_03`)")
+            df_d03 = conn.query(f"SELECT TOP 100 * FROM PROD_D_03 WHERE YEAR(Date) = {anio} AND MONTH(Date) = {mes}")
+            if df_d03.empty:
+                st.error(f"❌ VACÍA. Tampoco hay datos diarios procesados en este mes.")
+            else:
+                st.success(f"✅ CON DATOS. Mostrando registros diarios de {mes}/{anio}:")
+                st.dataframe(df_d03, use_container_width=True)
 
         except Exception as e:
-            st.error(f"❌ Error crítico de conexión o consulta SQL: {e}")
+            st.error(f"❌ Error de conexión: {e}")
